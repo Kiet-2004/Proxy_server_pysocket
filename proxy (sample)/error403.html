@@ -1,0 +1,149 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Your Page Title</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Condensed:700">
+    <style>
+        /* Your CSS code goes here */
+        @import url('https://fonts.googleapis.com/css?family=Roboto+Condensed:700');
+
+        $dark-grey: #111111;
+        $lighter-grey: #27292d;
+        $yellow: #e2bb2d;
+        $yellow2: #B79A2F;
+
+        html { 
+            height: 100%;
+        }
+
+        body {
+            min-height: 100%;
+            background-color:$dark-grey;
+            font-family: "Roboto Condensed";
+            text-transform: uppercase;
+            overflow: hidden;  
+        }
+
+        .police-tape {
+            background-color: $yellow;
+            background: linear-gradient(180deg, lighten($yellow, 20%) 0%, $yellow 5%, $yellow 90%, lighten($yellow, 5%) 95%, darken($yellow, 50%) 100%);
+            padding: 0.125em;
+            font-size: 3em;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .police-tape--1 {
+            transform: rotate(10deg);
+            position: absolute;
+            top: 40%;
+            left: -5%;
+            right: -5%;
+            z-index: 2;
+            margin-top: 0;
+        }
+        .police-tape--2 {
+            transform: rotate(-8deg);
+            position: absolute;
+            top: 50%;
+            left: -5%;
+            right: -5%;
+        }
+
+        .ghost {
+            display: flex;
+            justify-content: stretch;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .ghost--columns {
+            display: flex;
+            flex-grow: 1;
+            flex-basis: 200px;
+            align-content: stretch;
+        }
+
+        .ghost--navbar {
+            flex: 0 0 60px;
+            background: linear-gradient(0deg, $lighter-grey 0px, $lighter-grey 10px, transparent 10px);
+            border-bottom: 2px solid $dark-grey;
+        }
+        .ghost--column {
+            flex: 1 0 30%;
+            border-width: 0px;
+            border-style: solid;
+            border-color: $lighter-grey;
+            border-left-width: 10px;
+            background-color: darken($lighter-grey, 6%);
+            @for $i from 1 through 3 {
+                &:nth-child(#{$i}) {      
+                    .code {
+                        @for $j from 1 through 4 {
+                            &:nth-child(#{$j}) {
+                                // $rotation: (5 - random(10)) + deg;
+                                // transform: translateY(0px) rotate($rotation);      
+                                $spacing: (random(9) / 2) + 1em;
+                                margin-left: $spacing;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .ghost--main {
+            background-color: $dark-grey;
+            border-top: 15px solid lighten($lighter-grey, 4%);
+            flex: 1 0 100px;
+        }
+
+        .code {
+            display: block;
+            width: 100px;
+            background-color: $lighter-grey;
+            height: 1em;
+            margin: 1em;
+        }
+        .ghost--main .code {
+            height: 2em;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Your HTML content goes here -->
+    <div class="ghost">
+        <div class="ghost--navbar"></div>
+        <div class="ghost--columns">
+            <div class="ghost--column">
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+            </div>
+            <div class="ghost--column">
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+            </div>
+            <div class="ghost--column">
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+                <div class="code"></div>
+            </div>
+        </div>
+        <div class="ghost--main">
+            <div class="code"></div>
+            <div class="code"></div>
+        </div>
+    </div>
+    <h1 class="police-tape police-tape--1">
+        &nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: 403
+    </h1>
+    <h1 class="police-tape police-tape--2">Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Forbidden&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</h1>
+</body>
+</html>
