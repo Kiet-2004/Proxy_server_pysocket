@@ -132,7 +132,7 @@ def connect(client, addr):
             else:
                 server.close()
                 break
-    print("finish")
+    print("finish connect from", addr, "to", domain+file_path)
     client.close()
 
 # Building proxy  
