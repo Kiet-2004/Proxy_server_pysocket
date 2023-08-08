@@ -68,8 +68,7 @@ def send_response(conn, status_code, content_type, response_data):
 def send_error_response(conn):
     with open("error403.html", 'r') as f:
         resdata = f.read()
-    ctype = "text/html"
-    send_response(conn, b"403 Forbidden", ctype, resdata.encode())
+    conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode())
 
 # Xử lý kết nối
 def connect(client, addr):
@@ -79,7 +78,8 @@ def connect(client, addr):
     message = client.recv(max_receive)
     msg = message.decode()
     print(msg)
-
+    
+    
     # Phương thức, tên miền, filepath, port
     if len(msg.split()) > 1:
         method, url = msg.split(' ')[0], msg.split(' ')[1]
@@ -87,9 +87,9 @@ def connect(client, addr):
         client.close()
         return
     if method not in {"GET", "POST", "HEAD"}:
+        send_error_response(client)
         client.close()
         return
-    print(method, url, '\n')
     if url.find('://') != -1:
         domain = url[url.find('://')+3:]
     file_path = domain[domain.find('/'):]
@@ -99,6 +99,7 @@ def connect(client, addr):
         domain = domain[:domain.find(':')]
     else:
         port = 80
+    print(method, url, '\n')
     print("domain:", domain)
     print("port:", port)
     print("filepath:", file_path)
@@ -109,6 +110,7 @@ def connect(client, addr):
     try:
         server.connect((domain, port))
     except:
+        send_error_response(client)
         print("error")
         client.close()
         global death_flag
@@ -121,12 +123,14 @@ def connect(client, addr):
         try:
             data = server.recv(max_receive)
         except:
+            server.close()
             break
         else:
             if len(data) > 0:
                 print(data)
                 client.send(data)
             else:
+                server.close()
                 break
     print("finish")
     client.close()
