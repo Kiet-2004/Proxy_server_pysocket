@@ -4,4 +4,4 @@ whitelisting_enable=False
 whitelisting=example.com,google.com,bing.com
 time_restriction=False
 time=8-20
-timeout=900
+timeout=15

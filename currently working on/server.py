@@ -2,7 +2,8 @@ from socket import *
 import sys
 import threading
 import time as pytime
-from datetime import datetime, time 
+from datetime import datetime, time
+import os
 
 if len(sys.argv) != 3:
     print("How to use: python server.py [IP] [PORT]")
@@ -38,7 +39,6 @@ def read_config_file():
 
 cache_time, max_receive, whitelist_enable, whitelist, time_restriction, time_limit, timeout = read_config_file()
 
-
 # Checking time
 def is_in_time_limit(current_time):
     time1 = time(int(time_limit[0]),0,0)
@@ -50,19 +50,9 @@ def is_in_time_limit(current_time):
 # Checking whitelist
 def is_in_white_list(url):
     for link in whitelist:
-        if url in link:
+        if url.find(link) != -1 or link.find(url) != -1:
             return True
     return False
-
-#Sending response
-def send_response(conn, status_code, content_type, response_data):
-    header = f"HTTP/1.1 {status_code}\r\n"
-    header += f"Content-Length: {len(response_data)}\r\n"
-    header += f"Content-Type: {content_type}\r\n\r\n"
-
-    response = header.encode() + response_data
-    conn.send(response)
-    return response.decode()
 
 # Sending 403 Error
 def send_error_response(conn):
@@ -70,17 +60,130 @@ def send_error_response(conn):
         resdata = f.read()
     conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode())
 
+# Lưu cache
+def save_image_cache(data, domain, file_path):
+    file_path = file_path.rstrip('/')
+    file_name = file_path[file_path.rfind('/')+1:]
+    file_path = file_path[:-len(file_name)]
+    os.makedirs("cache/"+domain+file_path, exist_ok = True)
+    with open(f'cache/{domain+file_path+file_name}', 'wb') as cache:
+        cache.write(data)
+    cache.close()
+    return os.getcwd() + '/cache/' + domain + file_path + file_name
+def save_web_cache(data, file_extension, domain, file_path):
+    if file_path[-1] != '/':
+        file_path = file_path + '/'
+    os.makedirs("cache/"+domain+file_path, exist_ok = True)
+    with open(f'cache/{domain+file_path}cache.{file_extension}', 'wb') as cache:
+        cache.write(data)
+    cache.close()
+
+# Trích xuất ảnh
+def connect_image(domain, old_file_path, new_file_path, port, message):
+    # Kết nối tới server ảnh
+    if 'https://' in new_file_path:
+        return
+    elif 'http://' in new_file_path:
+        new_domain = new_file_path[new_file_path.find('://')+3:]
+        new_file_path = new_domain[mew_domain.find('/'):]
+        new_domain = new_domain[:new_domain.find('/')]        
+        server_temp = socket(AF_INET, SOCK_STREAM)
+        server_temp.settimeout(timeout)
+        try:
+            server_temp.connect((new_domain, port))
+        except:
+            return
+        msg = message.decode()
+        msg = msg.replace(domain+old_file_path, new_domain+new_file_path)
+        msg = msg.replace(domain, new_domain)
+        message = bytes(msg, 'utf-8')
+        server_temp.sendall(message)
+        data = b''
+        while 1:
+            try:
+                temp_data = server_temp.recv(max_receive)
+            except:
+                server_temp.close()
+                break
+            else:
+                if len(temp_data) > 0:
+                    data = data + temp_data
+                else:
+                    server_temp.close()
+                    break
+        return save_image_cache(data.split(b'\r\n\r\n')[1], new_domain, new_file_path)
+    else:
+        new_file_path = '/' + new_file_path
+        server_temp = socket(AF_INET, SOCK_STREAM)
+        server_temp.settimeout(timeout)
+        try:
+            server_temp.connect((domain, port))
+        except:
+            return
+        msg = message.decode()
+        msg = msg.replace(domain+old_file_path, domain+new_file_path)
+        message = bytes(msg, 'utf-8')
+        server_temp.sendall(message)
+        data = b''
+        while 1:
+            try:
+                temp_data = server_temp.recv(max_receive)
+            except:
+                server_temp.close()
+                break
+            else:
+                if len(temp_data) > 0:
+                    data = data + temp_data
+                else:
+                    server_temp.close()
+                    break
+        return save_image_cache(data.split(b'\r\n\r\n')[1], domain, new_file_path)
+    
+# Xử lý cache
+def caching(data, domain, file_path, port, message):
+    # Tách header và body
+    header = data.split(b'\r\n\r\n')[0]
+    body = data.split(b'\r\n\r\n')[1]
+
+    # Tách kiểu dữ liệu
+    content_type = header.split(b'Content-Type: ')[1].split(b'\r\n')[0].split(b';')[0].decode()
+    media_type = content_type.split('/')[0]
+    file_extension = content_type.split('/')[1]
+    print("media type:", media_type)
+    print("file extension:", file_extension)
+    if media_type not in {'text', 'image'}:
+        return
+
+    # Lưu cache ảnh được chèn trên web
+    data_temp = data.split(b'<img src="')
+    if len(data_temp) > 1:
+        for i in data_temp[1:]:
+            data = bytes(data.decode().replace(i[:i.find(b'\"')].decode(), connect_image(domain, file_path, i[:i.find(b'\"')].decode(), port, message)), 'utf-8')
+
+    # Lưu cache web hiện tại
+    if media_type == 'text':
+        save_web_cache(data, file_extension, domain, file_path)
+    elif media_type == 'image':
+        s = save_image_cache(body, domain, file_path)
+    
 # Xử lý kết nối
 def connect(client, addr):
+    # Time restriction
+    if time_restriction.find("True") != -1:
+        if not is_in_time_limit(datetime.now().time()):
+            send_error_response(client)
+            client.close()
+            return
+        
     print("Got connected from", addr)
 
     # Nhận tin từ client
     message = client.recv(max_receive)
+    message = message[:-2]+b"Connection: Close\r\n\r\n"
     msg = message.decode()
     print(msg)
     
-    
-    # Phương thức, tên miền, filepath, port
+    # Method, domain, filepath, port
     if len(msg.split()) > 1:
         method, url = msg.split(' ')[0], msg.split(' ')[1]
     else:
@@ -103,10 +206,17 @@ def connect(client, addr):
     print("domain:", domain)
     print("port:", port)
     print("filepath:", file_path)
-
+    
+    # Whitelisting 
+    if whitelist_enable.find("True") != -1:
+        if not is_in_white_list(domain):
+            send_error_response(client)
+            client.close()
+            return
+    
     # Kết nối tới server
     server = socket(AF_INET, SOCK_STREAM)
-    server.settimeout(900)
+    server.settimeout(timeout)
     try:
         server.connect((domain, port))
     except:
@@ -119,21 +229,28 @@ def connect(client, addr):
     server.sendall(message)
     
     # Nhận thông tin từ server
+    data = b''
     while 1:
         try:
-            data = server.recv(max_receive)
+            temp_data = server.recv(max_receive)
         except:
             server.close()
             break
         else:
-            if len(data) > 0:
-                print(data)
-                client.send(data)
+            if len(temp_data) > 0:
+                print(temp_data)
+                client.send(temp_data)
+                data = data + temp_data
             else:
                 server.close()
                 break
+
     print("finish connect from", addr, "to", domain+file_path)
     client.close()
+
+    # Caching data
+    if(method == 'GET'):
+        caching(data, domain, file_path, port, message)
 
 # Building proxy  
 def main():
@@ -142,13 +259,14 @@ def main():
     proxy.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     proxy.bind((host_ip, host_port))
     print("Ready to serve...")
-    proxy.listen(5)
+    proxy.listen(10)
 
     # Chờ kết nối từ client
     while 1:
         if death_flag:
             break
         client, addr = proxy.accept()
+        
         t = threading.Thread(name=addr[0]+":"+str(addr[1]), target=connect, args=(client, addr))
         t.setDaemon(True)
         t.start()
