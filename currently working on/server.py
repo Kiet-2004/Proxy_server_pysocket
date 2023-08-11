@@ -58,25 +58,31 @@ def is_in_white_list(url):
 def send_error_response(conn):
     with open("error403.html", 'r') as f:
         resdata = f.read()
-    conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode())
+    conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode('ISO-8859-1'))
 
 # Lưu cache
 def save_image_cache(data, domain, file_path):
     file_path = file_path.rstrip('/')
     file_name = file_path[file_path.rfind('/')+1:]
     file_path = file_path[:-len(file_name)]
-    os.makedirs("cache/"+domain+file_path, exist_ok = True)
-    with open(f'cache/{domain+file_path+file_name}', 'wb') as cache:
-        cache.write(data)
-    cache.close()
+    try:
+        os.makedirs("cache/"+domain+file_path, exist_ok = True)
+    except:
+        return 0
+    with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
+        f.write(data)
+    f.close()
     return os.getcwd() + '/cache/' + domain + file_path + file_name
 def save_web_cache(data, file_extension, domain, file_path):
     if file_path[-1] != '/':
         file_path = file_path + '/'
-    os.makedirs("cache/"+domain+file_path, exist_ok = True)
-    with open(f'cache/{domain+file_path}cache.{file_extension}', 'wb') as cache:
-        cache.write(data)
-    cache.close()
+    try:
+        os.makedirs("cache/"+domain+file_path, exist_ok = True)
+    except:
+        return
+    with open(f'cache/{domain+file_path}cache.{file_extension}', 'wb') as f:
+        f.write(data)
+    f.close()
 
 # Trích xuất ảnh
 def connect_image(domain, old_file_path, new_file_path, port, message):
@@ -93,7 +99,7 @@ def connect_image(domain, old_file_path, new_file_path, port, message):
             server_temp.connect((new_domain, port))
         except:
             return
-        msg = message.decode()
+        msg = message.decode('ISO-8859-1')
         msg = msg.replace(domain+old_file_path, new_domain+new_file_path)
         msg = msg.replace(domain, new_domain)
         message = bytes(msg, 'utf-8')
@@ -120,7 +126,7 @@ def connect_image(domain, old_file_path, new_file_path, port, message):
             server_temp.connect((domain, port))
         except:
             return
-        msg = message.decode()
+        msg = message.decode('ISO-8859-1')
         msg = msg.replace(domain+old_file_path, domain+new_file_path)
         message = bytes(msg, 'utf-8')
         server_temp.sendall(message)
@@ -146,7 +152,7 @@ def caching(data, domain, file_path, port, message):
     body = data.split(b'\r\n\r\n')[1]
 
     # Tách kiểu dữ liệu
-    content_type = header.split(b'Content-Type: ')[1].split(b'\r\n')[0].split(b';')[0].decode()
+    content_type = header.split(b'Content-Type: ')[1].split(b'\r\n')[0].split(b';')[0].decode('ISO-8859-1')
     media_type = content_type.split('/')[0]
     file_extension = content_type.split('/')[1]
     print("media type:", media_type)
@@ -158,13 +164,16 @@ def caching(data, domain, file_path, port, message):
     data_temp = data.split(b'<img src="')
     if len(data_temp) > 1:
         for i in data_temp[1:]:
-            data = bytes(data.decode().replace(i[:i.find(b'\"')].decode(), connect_image(domain, file_path, i[:i.find(b'\"')].decode(), port, message)), 'utf-8')
+            data = bytes(data.decode('ISO-8859-1').replace(i[:i.find(b'\"')].decode('ISO-8859-1'), connect_image(domain, file_path, i[:i.find(b'\"')].decode('ISO-8859-1'), port, message)), 'utf-8')
 
     # Lưu cache web hiện tại
     if media_type == 'text':
         save_web_cache(data, file_extension, domain, file_path)
     elif media_type == 'image':
         s = save_image_cache(body, domain, file_path)
+    with open('cache.txt', 'a+') as cache:
+        cache.write(domain + file_path + '\n' + str(datetime.now()) + '\n')
+    cache.close()
     
 # Xử lý kết nối
 def connect(client, addr):
@@ -180,12 +189,15 @@ def connect(client, addr):
     # Nhận tin từ client
     message = client.recv(max_receive)
     message = message[:-2]+b"Connection: Close\r\n\r\n"
-    msg = message.decode()
+    if message.find(b'Accept-Encoding:') != -1:
+        message = message.replace(message[message.find(b'Accept-Encoding:'):].split(b'\r\n')[0] + b'\r\n', b'')
+    msg = message.decode('ISO-8859-1')
     print(msg)
     
     # Method, domain, filepath, port
     if len(msg.split()) > 1:
-        method, url = msg.split(' ')[0], msg.split(' ')[1]
+        method = msg.split()[0]
+        url = msg.split()[1]
     else:
         client.close()
         return
@@ -195,6 +207,8 @@ def connect(client, addr):
         return
     if url.find('://') != -1:
         domain = url[url.find('://')+3:]
+    else:
+        domain = url
     file_path = domain[domain.find('/'):]
     domain = domain[:domain.find('/')]
     if domain.find(':') != -1:
@@ -202,10 +216,13 @@ def connect(client, addr):
         domain = domain[:domain.find(':')]
     else:
         port = 80
-    print(method, url, '\n')
+
+    print('request')
+    print(message.decode('ISO-8859-1'))
+    print("method:", method)
     print("domain:", domain)
     print("port:", port)
-    print("filepath:", file_path)
+    print("filepath:", file_path, '\n')
     
     # Whitelisting 
     if whitelist_enable.find("True") != -1:
@@ -238,7 +255,6 @@ def connect(client, addr):
             break
         else:
             if len(temp_data) > 0:
-                print(temp_data)
                 client.send(temp_data)
                 data = data + temp_data
             else:
@@ -249,6 +265,8 @@ def connect(client, addr):
     client.close()
 
     # Caching data
+    if data.split()[1] != b'200':
+       return
     if(method == 'GET'):
         caching(data, domain, file_path, port, message)
 
