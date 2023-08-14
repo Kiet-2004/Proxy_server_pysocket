@@ -1,7 +1,7 @@
 cache_time=900
-max_recieve=4096
+max_receive=4096
 whitelisting_enable=False
 whitelisting=example.com,google.com,bing.com
 time_restriction=False
 time=8-20
-timeout=900
+timeout=60

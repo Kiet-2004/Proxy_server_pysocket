@@ -2,7 +2,8 @@ from socket import *
 import sys
 import threading
 import time as pytime
-from datetime import datetime, time 
+from datetime import datetime, time, timedelta
+import os
 
 if len(sys.argv) != 3:
     print("How to use: python server.py [IP] [PORT]")
@@ -10,7 +11,7 @@ if len(sys.argv) != 3:
 
 host_ip = sys.argv[1]
 host_port = int(sys.argv[2]) 
-death_flag = False
+
 #Read the config file
 def read_config_file():
     file = open('config.txt', 'r')
@@ -38,7 +39,6 @@ def read_config_file():
 
 cache_time, max_receive, whitelist_enable, whitelist, time_restriction, time_limit, timeout = read_config_file()
 
-
 # Checking time
 def is_in_time_limit(current_time):
     time1 = time(int(time_limit[0]),0,0)
@@ -58,11 +58,85 @@ def is_in_white_list(url):
 def send_error_response(conn):
     with open("error403.html", 'r') as f:
         resdata = f.read()
-    conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode())
+    conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode('ISO-8859-1'))
 
+def fileProcess(file_path):
+    file_path = file_path.rstrip('/')
+    if file_path.find('?') != -1:
+        file_path = file_path[:file_path.find('?')]
+    file_name = file_path[file_path.rfind('/')+1:]
+    file_path = file_path[:-len(file_name)]
+    if not file_path:
+        file_path = '/'
+    if not file_name:
+        file_name = f'cache.html'
+    if file_name.find('.') == -1:
+        file_name = file_name + f'.html'
+    return file_path, file_name
+    
+# Lụm cache
+def getCache(client, domain, file_path):
+    file_path, file_name = fileProcess(file_path)
+    try:
+        f = open('cache.txt', 'r+')
+    except:
+        return False
+    else:
+        cache = f.read()
+        if cache.find(domain + file_path + file_name) != -1:
+            time_cache = datetime.strptime(cache[cache.find(domain + file_path + file_name):].split('\n')[1], '%Y-%m-%d %H:%M:%S.%f')
+            time_lim = timedelta(seconds = cache_time)
+            print("connect to" + domain + file_path + file_name)
+            print("last caching:", time_cache)
+            print("time from last caching:", datetime.now() - time_cache)
+            if datetime.now() - time_cache >= time_lim:
+                new_cache = ""
+                for temp_cache in cache.split(domain + file_path + file_name + '\n' + str(time_cache) + '\n'):
+                    if temp_cache:
+                        new_cache = new_cache + temp_cache
+                f.truncate(0)
+                f.seek(0)
+                f.write(new_cache)
+                f.close()
+                return False
+            f.close()
+        else:
+            return False
+                                      
+    try:
+        f = open(f'cache/{domain+file_path+file_name}', 'rb')
+    except:
+        return False
+    else:
+        data = f.read()
+        f.close()
+        client.send(data)
+        return True
+
+# Xử lý cache
+def caching(data, domain, file_path):
+    # Tách header và body
+    header = data.split(b'\r\n\r\n')[0]
+    body = data.split(b'\r\n\r\n')[1]
+
+    # Tách kiểu dữ liệu
+    media_type = header.split(b'Content-Type: ')[1].split(b'\r\n')[0].split(b';')[0].decode('ISO-8859-1').split('/')[0]
+    print("media type:", media_type)
+    if media_type not in {'text', 'image'}:
+        return
+
+    file_path, file_name = fileProcess(file_path)
+        
+    os.makedirs("cache/"+domain+file_path, exist_ok = True)
+    with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
+        f.write(data)
+    
+    with open('cache.txt', 'a') as cache:
+        cache.write(domain + file_path + file_name + '\n' + str(datetime.now()) + '\n')
+    
 # Xử lý kết nối
 def connect(client, addr):
-        # Time restriction
+    # Time restriction
     if time_restriction.find("True") != -1:
         if not is_in_time_limit(datetime.now().time()):
             send_error_response(client)
@@ -73,21 +147,30 @@ def connect(client, addr):
 
     # Nhận tin từ client
     message = client.recv(max_receive)
-    msg = message.decode()
-    print(msg)
+    ## Dùng Connection close để ngắt kết nối khi nhận đủ dữ liệu
+    message = message[:-2]+b"Connection: Close\r\n\r\n"
+    ## Bỏ encode để dễ đọc :")
+    if message.find(b'Accept-Encoding:') != -1:
+        message = message.replace(message[message.find(b'Accept-Encoding:'):].split(b'\r\n')[0] + b'\r\n', b'')
+    msg = message.decode('ISO-8859-1')
     
-    # Phương thức, tên miền, filepath, port
+    # Trích xuất method, domain, filepath, port
     if len(msg.split()) > 1:
-        method, url = msg.split(' ')[0], msg.split(' ')[1]
+        method = msg.split()[0]
+        url = msg.split()[1]
     else:
         client.close()
         return
+    ## Kiểm tra method
     if method not in {"GET", "POST", "HEAD"}:
         send_error_response(client)
         client.close()
         return
+    ##
     if url.find('://') != -1:
         domain = url[url.find('://')+3:]
+    else:
+        domain = url
     file_path = domain[domain.find('/'):]
     domain = domain[:domain.find('/')]
     if domain.find(':') != -1:
@@ -95,10 +178,19 @@ def connect(client, addr):
         domain = domain[:domain.find(':')]
     else:
         port = 80
-    print(method, url, '\n')
+
+    print('request')
+    print(message.decode('ISO-8859-1'))
+    print("method:", method)
     print("domain:", domain)
     print("port:", port)
-    print("filepath:", file_path)
+    print("filepath:", file_path, '\n')
+
+    # Kiểm tra cache
+    if getCache(client, domain, file_path):
+        print("got data from cache <3")
+        client.close()
+        return
     
     # Whitelisting 
     if whitelist_enable.find("True") != -1:
@@ -109,34 +201,40 @@ def connect(client, addr):
     
     # Kết nối tới server
     server = socket(AF_INET, SOCK_STREAM)
-    server.settimeout(900)
+    server.settimeout(timeout)
     try:
         server.connect((domain, port))
     except:
         send_error_response(client)
         print("error")
         client.close()
-        global death_flag
-        death_flag = True
         return
     server.sendall(message)
     
     # Nhận thông tin từ server
+    data = b''
     while 1:
         try:
-            data = server.recv(max_receive)
+            temp_data = server.recv(max_receive)
         except:
             server.close()
             break
         else:
-            if len(data) > 0:
-                print(data)
-                client.send(data)
+            if len(temp_data) > 0:
+                client.send(temp_data)
+                data = data + temp_data
             else:
                 server.close()
                 break
+
     print("finish connect from", addr, "to", domain+file_path)
     client.close()
+
+    # Caching data
+    if data.split()[1] != b'200':
+       return
+    if(method == 'GET'):
+        caching(data, domain, file_path)
 
 # Building proxy  
 def main():
@@ -145,12 +243,10 @@ def main():
     proxy.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     proxy.bind((host_ip, host_port))
     print("Ready to serve...")
-    proxy.listen(5)
+    proxy.listen(10)
 
     # Chờ kết nối từ client
     while 1:
-        if death_flag:
-            break
         client, addr = proxy.accept()
         
         t = threading.Thread(name=addr[0]+":"+str(addr[1]), target=connect, args=(client, addr))

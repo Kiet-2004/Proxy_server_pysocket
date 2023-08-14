@@ -136,6 +136,9 @@ def proxy(conn, proxy_url,data):
             "cache": res,
             "last_update_time": pytime.time() 
         }
+        print("here is cache")
+        print(cache[url])
+        print("here is cache")
         sv.close()
         conn.close()
     except socket.timeout:
