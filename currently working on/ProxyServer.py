@@ -98,7 +98,7 @@ def getCache(client, domain, file_path):
                 f.write(new_cache)
                 f.close()
                 return False
-            f.close()
+            f.close
         else:
             return False
                                       
@@ -138,6 +138,7 @@ def connect(client, addr):
     # Time restriction
     if time_restriction.find("True") != -1:
         if not is_in_time_limit(datetime.now().time()):
+            print("TIME RESTRICTION")
             send_error_response(client)
             client.close()
             return
@@ -178,25 +179,26 @@ def connect(client, addr):
     else:
         port = 80
 
-    print('request')
-    print(message.decode('ISO-8859-1'))
-    print("method:", method)
-    print("domain:", domain)
-    print("port:", port)
-    print("filepath:", file_path, '\n')
+    # print('request')
+    # print(message.decode('ISO-8859-1'))
+    # print("method:", method)
+    # print("domain:", domain)
+    # print("port:", port)
+    # print("filepath:", file_path, '\n')
 
+    # Whitelisting 
+    if whitelist_enable.find("True") != -1:
+        if not is_in_white_list(domain):
+            print("NOT IN WHITELIST")
+            send_error_response(client)
+            client.close()
+            return
+    
     # Kiểm tra cache
     if getCache(client, domain, file_path):
         print("got data from cache <3")
         client.close()
         return
-    
-    # Whitelisting 
-    if whitelist_enable.find("True") != -1:
-        if not is_in_white_list(domain):
-            send_error_response(client)
-            client.close()
-            return
     
     # Kết nối tới server
     server = socket(AF_INET, SOCK_STREAM)
