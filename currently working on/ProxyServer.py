@@ -109,12 +109,16 @@ def getCache(client, domain, file_path):
         try:
             h = open(f'cache/{domain+file_path+file_name}.header', 'rb')
         except:
-            return False
+            data = f.read()
+            f.close()
+            client.send(data)
+            return True
         else:
             header = h.read()
             body = f.read()
-            data = body
+            data = header + b'\r\n\r\n' + body
             f.close()
+            h.close()
             client.send(data)
             return True
 
@@ -134,10 +138,14 @@ def caching(data, domain, file_path):
     
     os.makedirs("cache/"+domain+file_path, exist_ok = True)
 
-    with open(f'cache/{domain+file_path+file_name}.header', 'wb') as f:
-        f.write(header)
-    with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
-        f.write(data)
+    if media_type == 'text':
+        with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
+            f.write(data)
+    elif media_type == 'image':
+        with open(f'cache/{domain+file_path+file_name}.header', 'wb') as f:
+            f.write(header)
+        with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
+            f.write(body)
         
     with open('cache.txt', 'a') as cache:
         cache.write(domain + file_path + file_name + '\n' + str(datetime.now()) + '\n')
