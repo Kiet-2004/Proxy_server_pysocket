@@ -1,11 +1,11 @@
 from socket import *
 import sys
 import threading
-import time
+import time as pytime
 from datetime import datetime, time, timedelta
 import os
 
-# Đọc file config
+#Read the config file
 def read_config_file():
     file = open('config.txt', 'r')
     cache_time = file.readline()
@@ -37,7 +37,7 @@ def read_config_file():
 
 cache_time, max_receive, whitelist_enable, whitelist, time_restriction, time_limit, timeout, host_ip, host_port = read_config_file()
 
-# Kiểm tra thời gian có nằm trong thời gian giới hạn không
+# Checking time
 def is_in_time_limit(current_time):
     time1 = time(int(time_limit[0]),0,0)
     time2 = time(int(time_limit[1]),0,0)
@@ -45,20 +45,19 @@ def is_in_time_limit(current_time):
         return True
     return False
 
-# Kiểm tra có nằm trong whitelist không
+# Checking whitelist
 def is_in_white_list(url):
     for link in whitelist:
         if url.find(link) != -1 or link.find(url) != -1:
             return True
     return False
 
-# Gửi 403 error
+# Sending 403 Error
 def send_error_response(conn):
     with open("error403.html", 'r') as f:
         resdata = f.read()
     conn.send(b'HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n' + resdata.encode('ISO-8859-1'))
 
-# Xử lý tên miền thành tên file
 def fileProcess(file_path):
     file_path = file_path.rstrip('/')
     if file_path.find('?') != -1:
@@ -85,7 +84,7 @@ def getCache(client, domain, file_path):
         if cache.find(domain + file_path + file_name) != -1:
             time_cache = datetime.strptime(cache[cache.find(domain + file_path + file_name):].split('\n')[1], '%Y-%m-%d %H:%M:%S.%f')
             time_lim = timedelta(seconds = cache_time)
-            print("connect to" + domain + file_path + file_name)
+            print("connect to " + domain + file_path + file_name)
             print("last caching:", time_cache)
             print("time from last caching:", datetime.now() - time_cache)
             if datetime.now() - time_cache >= time_lim:
@@ -98,7 +97,7 @@ def getCache(client, domain, file_path):
                 f.write(new_cache)
                 f.close()
                 return False
-            f.close
+            f.close()
         else:
             return False
                                       
@@ -107,10 +106,17 @@ def getCache(client, domain, file_path):
     except:
         return False
     else:
-        data = f.read()
-        f.close()
-        client.send(data)
-        return True
+        try:
+            h = open(f'cache/{domain+file_path+file_name}.header', 'rb')
+        except:
+            return False
+        else:
+            header = h.read()
+            body = f.read()
+            data = body
+            f.close()
+            client.send(data)
+            return True
 
 # Xử lý cache
 def caching(data, domain, file_path):
@@ -125,30 +131,31 @@ def caching(data, domain, file_path):
         return
 
     file_path, file_name = fileProcess(file_path)
-        
+    
     os.makedirs("cache/"+domain+file_path, exist_ok = True)
+
+    with open(f'cache/{domain+file_path+file_name}.header', 'wb') as f:
+        f.write(header)
     with open(f'cache/{domain+file_path+file_name}', 'wb') as f:
         f.write(data)
-    
+        
     with open('cache.txt', 'a') as cache:
         cache.write(domain + file_path + file_name + '\n' + str(datetime.now()) + '\n')
     
 # Xử lý kết nối
 def connect(client, addr):
+    print("Got connected from", addr)
+    
+    # Nhận tin từ client
+    message = client.recv(max_receive)
+
     # Time restriction
     if time_restriction.find("True") != -1:
         if not is_in_time_limit(datetime.now().time()):
-            print("TIME RESTRICTION")
             send_error_response(client)
             client.close()
             return
-        
-    print("Got connected from", addr)
-
-    # Nhận tin từ client
-    message = client.recv(max_receive)
-    ## Dùng Connection close để ngắt kết nối khi nhận đủ dữ liệu
-    message = message[:-2]+b"Connection: Close\r\n\r\n"
+    
     ## Bỏ encode để dễ đọc :")
     if message.find(b'Accept-Encoding:') != -1:
         message = message.replace(message[message.find(b'Accept-Encoding:'):].split(b'\r\n')[0] + b'\r\n', b'')
@@ -166,6 +173,9 @@ def connect(client, addr):
         send_error_response(client)
         client.close()
         return
+    if method in {"GET", "HEAD"}:
+        ## Dùng Connection close để ngắt kết nối khi nhận đủ dữ liệu
+        message = message[:-2]+b"Connection: Close\r\n\r\n"
     ##
     if url.find('://') != -1:
         domain = url[url.find('://')+3:]
@@ -179,26 +189,26 @@ def connect(client, addr):
     else:
         port = 80
 
-    # print('request')
-    # print(message.decode('ISO-8859-1'))
-    # print("method:", method)
-    # print("domain:", domain)
-    # print("port:", port)
-    # print("filepath:", file_path, '\n')
+    print('request')
+    print(message.decode('ISO-8859-1'))
+    print("method:", method)
+    print("domain:", domain)
+    print("port:", port)
+    print("filepath:", file_path, '\n')
 
     # Whitelisting 
     if whitelist_enable.find("True") != -1:
         if not is_in_white_list(domain):
-            print("NOT IN WHITELIST")
             send_error_response(client)
             client.close()
             return
-    
+
     # Kiểm tra cache
     if getCache(client, domain, file_path):
         print("got data from cache <3")
         client.close()
         return
+
     
     # Kết nối tới server
     server = socket(AF_INET, SOCK_STREAM)
@@ -231,7 +241,7 @@ def connect(client, addr):
     print("finish connect from", addr, "to", domain+file_path)
     client.close()
 
-    # Lưu vô cache
+    # Caching data
     if data.split()[1] != b'200':
        return
     if(method == 'GET'):
