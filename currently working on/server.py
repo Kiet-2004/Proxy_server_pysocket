@@ -86,7 +86,7 @@ def getCache(client, domain, file_path):
         if cache.find(domain + file_path + file_name) != -1:
             time_cache = datetime.strptime(cache[cache.find(domain + file_path + file_name):].split('\n')[1], '%Y-%m-%d %H:%M:%S.%f')
             time_lim = timedelta(seconds = cache_time)
-            print("connect to" + domain + file_path + file_name)
+            print("connect to " + domain + file_path + file_name)
             print("last caching:", time_cache)
             print("time from last caching:", datetime.now() - time_cache)
             if datetime.now() - time_cache >= time_lim:
@@ -136,17 +136,18 @@ def caching(data, domain, file_path):
     
 # Xử lý kết nối
 def connect(client, addr):
+    print("Got connected from", addr)
+    
+    # Nhận tin từ client
+    message = client.recv(max_receive)
+
     # Time restriction
     if time_restriction.find("True") != -1:
         if not is_in_time_limit(datetime.now().time()):
             send_error_response(client)
             client.close()
             return
-        
-    print("Got connected from", addr)
-
-    # Nhận tin từ client
-    message = client.recv(max_receive)
+    
     ## Dùng Connection close để ngắt kết nối khi nhận đủ dữ liệu
     message = message[:-2]+b"Connection: Close\r\n\r\n"
     ## Bỏ encode để dễ đọc :")
